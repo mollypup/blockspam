@@ -66,7 +66,7 @@ def spam_blocks(client, dids, repo):
                 sleep(attempt)
                 print("done eeping")
             else:
-                sleep(8.5)  # sleep for a bit to avoid rate limiting
+                sleep(9)  # sleep to be nice to firehouse-chan
                 break
         print(f"spammed! {i}")
 
