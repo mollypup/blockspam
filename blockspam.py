@@ -1,23 +1,22 @@
 from atproto import Client, models
 import atproto_client
-from time import time, sleep
+from time import sleep
 import datetime
+import httpx
 
 
 def main():
-    pds = 'pds here'
     user, pwd = 'user', 'pwd'
+    repo = resolve_handle(user)
+    pds = resolve_pds(repo)
     session = None
-    # session = "not so fast"
-    repo = "repo"
-
     client = create_client(pds, user, pwd, session)
 
     with open("plc_all.csv") as f:
         data = f.read()
 
     dids = [d[1:-1] for d in data.splitlines()]
-    day_1 = dids[:1_000]
+    day_1 = dids[:1_000_000]
     spam_blocks(client, day_1, repo)
 
 
@@ -37,7 +36,7 @@ def spam_blocks(client, dids, repo):
     did_split = split_list(dids, 200)
     print("Spamming!")
     for i, d in enumerate(did_split):
-        created_at = unix_to_iso_string(time())
+        created_at = client.get_current_time_iso()
         list_items = (models.AppBskyGraphBlock.Record(
             created_at=created_at,
             subject=did
@@ -66,7 +65,7 @@ def spam_blocks(client, dids, repo):
                 sleep(attempt)
                 print("done eeping")
             else:
-                sleep(9)  # sleep to be nice to firehouse-chan
+                sleep(60)  # sleep to be nice to firehouse-chan
                 break
         print(f"spammed! {i}")
 
@@ -84,8 +83,28 @@ def unix_to_iso_string(timestamp: float | int):
     )
 
 
-def iso_string_now():
-    return unix_to_iso_string(time.time())
+def resolve_pds(did):
+    if did.startswith("did:plc:"):
+        r = httpx.get(f"https://plc.directory/{did}")
+        r.raise_for_status()
+    elif did.startswith("did:web"):
+        r = httpx.get(f"https://{did.lstrip("did:web")}/.well-known/did.json")
+        r.raise_for_status()
+    else:
+        raise ValueError("Invalid DID Method")
+    for service in r.json()["service"]:
+        if service["id"] == "#atproto_pds":
+            return service["serviceEndpoint"]
+
+
+def resolve_handle(user):
+    if user.startswith("did:"):
+        did = user
+    else:
+        pub = Client("https://public.api.bsky.app")
+        did = pub.resolve_handle(user).did
+
+    return did
 
 
 def split_list(lst, n):
